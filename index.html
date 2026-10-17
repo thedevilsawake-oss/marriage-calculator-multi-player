@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1f6f4a" />
+    <title>Marriage Calculator</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%99%A5%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Marriage Calculator</h1>
+      <button id="new-game" class="ghost" hidden>New game</button>
+    </header>
+
+    <main>
+      <!-- Setup: shown when no game is in progress -->
+      <section id="setup" class="card" hidden>
+        <h2>Players</h2>
+        <p class="hint">Add everyone at the table, in seating order.</p>
+        <ol id="setup-players"></ol>
+        <div class="row">
+          <button id="add-player" class="ghost">+ Add player</button>
+          <button id="start-game">Start game</button>
+        </div>
+        <p id="setup-error" class="error" hidden></p>
+      </section>
+
+      <!-- Game: totals, hand entry, history -->
+      <section id="game" hidden>
+        <div class="card">
+          <h2>Totals</h2>
+          <table id="totals"></table>
+        </div>
+
+        <div class="card">
+          <h2>Hand <span id="hand-number"></span></h2>
+          <table id="hand-entry">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th title="Player who ended the game">Won</th>
+                <th title="Saw the joker (tiplu)">Seen</th>
+                <th>Maal</th>
+                <th>Net</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <label class="check">
+            <input type="checkbox" id="dublee-win" />
+            Winner ended with 8 dublees (+5 from each opponent)
+          </label>
+          <p id="hand-error" class="error" hidden></p>
+          <button id="save-hand">Save hand</button>
+        </div>
+
+        <div class="card">
+          <h2>History</h2>
+          <p id="no-history" class="hint">No hands played yet.</p>
+          <div class="scroll">
+            <table id="history"></table>
+          </div>
+        </div>
+
+        <details class="card rules">
+          <summary>How scoring works</summary>
+          <ul>
+            <li>Each opponent pays the winner <b>3</b> if they saw the joker, <b>10</b> if they did not.</li>
+            <li>If the winner ended with 8 dublees, each opponent pays an extra <b>5</b>.</li>
+            <li>Players who did not see the joker score <b>0</b> maal.</li>
+            <li>Everyone settles the difference in maal with everyone else. The app does this through the winner:
+              each player pays <code>T + w − n × S</code>, where T is the total maal, S is that player's maal,
+              n is the number of players and w is their 3/10 (+5) payment. A negative amount means the winner pays them.</li>
+          </ul>
+        </details>
+      </section>
+    </main>
+
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>

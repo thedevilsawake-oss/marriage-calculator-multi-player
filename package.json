@@ -1,0 +1,11 @@
+{
+  "name": "marriage-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Point calculator for the Marriage card game",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "npx --yes serve ."
+  }
+}
