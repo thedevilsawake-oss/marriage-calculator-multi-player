@@ -39,7 +39,10 @@
         <p id="hand-error" class="error center" hidden></p>
 
         <div class="panel">
-          <h2>Leaderboard</h2>
+          <div class="panel-head">
+            <h2>Leaderboard</h2>
+            <button id="cash-out" class="pill small gold-pill" hidden>💰 Cash out</button>
+          </div>
           <ol id="standings"></ol>
         </div>
 
@@ -65,6 +68,20 @@
         </details>
       </section>
     </main>
+
+    <dialog id="cashout" aria-labelledby="cashout-title">
+      <div class="felt cashout-felt">
+        <button class="pill icon close" id="cashout-close" aria-label="Close">✕</button>
+        <h2 class="neon" id="cashout-title">Cash out</h2>
+        <p class="hint" id="cashout-sub"></p>
+        <ol id="payments"></ol>
+        <label class="rate">
+          <span>Money per point <small>(optional)</small></span>
+          <input type="text" id="rate" inputmode="decimal" placeholder="e.g. Rs 1 or $0.10" maxlength="16" />
+        </label>
+        <button id="share" class="gold-btn">📋 Copy for group chat</button>
+      </div>
+    </dialog>
 
     <div id="toast" role="status" aria-live="polite"></div>
     <div id="fx" aria-hidden="true"></div>

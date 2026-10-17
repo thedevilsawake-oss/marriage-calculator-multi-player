@@ -1,4 +1,4 @@
-import { settleHand } from "./scoring.js";
+import { settleHand, whoOwesWhom } from "./scoring.js";
 import { sound, buzz, flyChips, confetti, rollNumber, toast, setMuted } from "./fx.js";
 
 const STORAGE_KEY = "marriage-calculator:v1";
@@ -495,6 +495,101 @@ function renderHistory() {
   $("#history").replaceChildren(...items.reverse());
 }
 
+// ---------- Cash out: who owes what ----------
+
+// "Rs 1", "$0.10", "2 NPR" -> { prefix, value, suffix }; null if there's no number.
+function parseRate(text) {
+  const m = text.trim().match(/^(\D*?)\s*(\d+(?:\.\d+)?)\s*(\D*)$/);
+  if (!m || !Number(m[2])) return null;
+  return { prefix: m[1].trim(), value: Number(m[2]), suffix: m[3].trim() };
+}
+
+function money(points, rate) {
+  const amount = (points * rate.value).toFixed(2).replace(/\.00$/, "");
+  const space = rate.prefix.length > 1 ? " " : "";
+  return `${rate.prefix}${space}${amount}${rate.suffix ? ` ${rate.suffix}` : ""}`;
+}
+
+function cashOutText(payments, rate) {
+  const byId = Object.fromEntries(state.players.map((p) => [p.id, p]));
+  const lines = payments.map(
+    ({ from, to, amount }) =>
+      `${byId[from].name} pays ${byId[to].name} ${amount} pts${rate ? ` (${money(amount, rate)})` : ""}`,
+  );
+  const hands = `${state.hands.length} hand${state.hands.length === 1 ? "" : "s"}`;
+  return [`♥ Marriage cash out (${hands})`, ...(lines.length ? lines : ["Everyone is even!"])].join("\n");
+}
+
+function renderCashOut(animate) {
+  const payments = whoOwesWhom(totals());
+  const rate = parseRate(prefs.rate || "");
+  const byId = Object.fromEntries(state.players.map((p) => [p.id, p]));
+  $("#cashout-sub").textContent = payments.length
+    ? `${payments.length} payment${payments.length === 1 ? " squares" : "s square"} everyone up after ${state.hands.length} hand${state.hands.length === 1 ? "" : "s"}.`
+    : "Everyone is even. Nobody owes anything.";
+  $("#payments").replaceChildren(
+    ...payments.map(({ from, to, amount }, i) => {
+      const who = (p, cls) => {
+        const avatar = el("span", { className: "avatar small", textContent: p.avatar });
+        avatar.style.setProperty("--ring", p.color);
+        return el("span", { className: `party ${cls}` }, avatar, el("b", { textContent: p.name }));
+      };
+      const row = el(
+        "li",
+        {},
+        who(byId[from], "from"),
+        el("span", { className: "arrow" }, el("span", { className: "pts", textContent: `${amount}` }), el("span", { className: "line" })),
+        who(byId[to], "to"),
+        rate ? el("span", { className: "cash", textContent: money(amount, rate) }) : null,
+      );
+      if (animate) {
+        row.style.animationDelay = `${i * 140}ms`;
+        setTimeout(sound.chip, 150 + i * 140);
+      }
+      return row;
+    }),
+  );
+}
+
+$("#cash-out").onclick = () => {
+  $("#rate").value = prefs.rate || "";
+  $("#share").textContent = navigator.share ? "📤 Share with the group" : "📋 Copy for group chat";
+  renderCashOut(true);
+  $("#cashout").showModal();
+  sound.tap();
+};
+
+$("#cashout-close").onclick = () => $("#cashout").close();
+// Close when tapping the dimmed backdrop.
+$("#cashout").onclick = (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.close();
+};
+
+$("#rate").oninput = (e) => {
+  prefs.rate = e.target.value;
+  savePrefs();
+  renderCashOut(false);
+};
+
+$("#share").onclick = async () => {
+  const text = cashOutText(whoOwesWhom(totals()), parseRate(prefs.rate || ""));
+  const button = $("#share");
+  const label = button.textContent;
+  try {
+    if (navigator.share) {
+      await navigator.share({ text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    button.textContent = "✅ Copied!";
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    button.textContent = "Couldn't copy";
+  }
+  sound.tap();
+  setTimeout(() => (button.textContent = label), 1800);
+};
+
 $("#undo").onclick = () => {
   if (!state.hands.length || !confirm(`Undo hand ${state.hands.length}?`)) return;
   const before = totals();
@@ -511,6 +606,7 @@ function render(rollFrom) {
   $("#setup").hidden = inGame;
   $("#game").hidden = !inGame;
   $("#new-game").hidden = !inGame;
+  $("#cash-out").hidden = !state.hands.length;
   if (!inGame) return renderSetup();
   if (!hand) resetHand();
   renderTable(rollFrom);

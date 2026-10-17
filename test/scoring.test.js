@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { settleHand } from "../src/scoring.js";
+import { settleHand, whoOwesWhom } from "../src/scoring.js";
 
 // Pairwise reference implementation from the rules: every pair of players
 // settles the difference in scores, and each opponent pays the winner 3/10
@@ -88,4 +88,21 @@ test("unseen players' maal counts as zero", () => {
     dubleeWin: false,
   });
   assert.deepEqual(net, { a: 10, b: -10 });
+});
+
+test("whoOwesWhom squares every balance", () => {
+  const totals = { a: 50, b: -65, c: -7, d: 22 };
+  const payments = whoOwesWhom(totals);
+  const after = { ...totals };
+  for (const { from, to, amount } of payments) {
+    assert.ok(amount > 0);
+    after[from] += amount;
+    after[to] -= amount;
+  }
+  assert.deepEqual(after, { a: 0, b: 0, c: 0, d: 0 });
+  assert.ok(payments.length <= 3);
+});
+
+test("whoOwesWhom with everyone even needs no payments", () => {
+  assert.deepEqual(whoOwesWhom({ a: 0, b: 0 }), []);
 });

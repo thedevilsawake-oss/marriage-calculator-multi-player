@@ -42,3 +42,33 @@ export function settleHand({ players, winnerId, dubleeWin }) {
   net[winnerId] = winnerNet;
   return net;
 }
+
+/**
+ * Turn running totals into the fewest payments that square everyone up.
+ * Biggest debtor pays biggest creditor first, until all balances are zero.
+ * @param {Record<string, number>} totals net points per player id (sums to 0)
+ * @returns {{from: string, to: string, amount: number}[]}
+ */
+export function whoOwesWhom(totals) {
+  const creditors = [];
+  const debtors = [];
+  for (const [id, n] of Object.entries(totals)) {
+    if (n > 0) creditors.push({ id, left: n });
+    else if (n < 0) debtors.push({ id, left: -n });
+  }
+  creditors.sort((a, b) => b.left - a.left);
+  debtors.sort((a, b) => b.left - a.left);
+
+  const payments = [];
+  let c = 0;
+  let d = 0;
+  while (c < creditors.length && d < debtors.length) {
+    const amount = Math.min(creditors[c].left, debtors[d].left);
+    payments.push({ from: debtors[d].id, to: creditors[c].id, amount });
+    creditors[c].left -= amount;
+    debtors[d].left -= amount;
+    if (creditors[c].left === 0) c++;
+    if (debtors[d].left === 0) d++;
+  }
+  return payments;
+}

@@ -14,6 +14,8 @@ Players sit around a felt table with avatars and chip balances. When a hand is s
    - tap **🃏 8 dublees** if the winner ended with dublees.
 3. Each seat shows its result for the hand as you go. Press **Settle** to pay out.
 
+When you're done for the night, tap **💰 Cash out** on the leaderboard. It shows the fewest payments that square everyone up, like "Bikash pays Asha 50". You can add a money value per point (e.g. `Rs 1`) and copy or share the summary to your group chat.
+
 Scores are saved in the browser, so a reload won't lose them. Use **Undo last** or ✕ in the hand log to remove a hand, or **New table** to start again. 🔊 turns the sound on or off.
 
 ## Scoring rules
