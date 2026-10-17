@@ -75,7 +75,28 @@ h2 {
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+}
+
+.header-actions .pill {
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 400px) {
+  h1 {
+    font-size: 1.1rem;
+    white-space: nowrap;
+  }
+  h1 .suit {
+    display: none;
+  }
+  header {
+    padding: 12px;
+  }
+  .header-actions .pill {
+    padding: 7px 10px;
+  }
 }
 
 main {

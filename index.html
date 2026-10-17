@@ -9,14 +9,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="src/style.css" />
+    <link rel="stylesheet" href="src/style.css?v=5" />
   </head>
   <body>
     <header>
       <h1><span class="suit">♥</span> Marriage</h1>
       <div class="header-actions">
         <button id="sound" class="pill" aria-label="Toggle sound">🔊</button>
-        <button id="new-game" class="pill" hidden>New table</button>
+        <button id="new-game" class="pill" title="New table" aria-label="New table" hidden>↺ New</button>
+        <button id="cash-out" class="pill gold-pill" hidden>💰 Cash out</button>
       </div>
     </header>
 
@@ -39,10 +40,7 @@
         <p id="hand-error" class="error center" hidden></p>
 
         <div class="panel">
-          <div class="panel-head">
-            <h2>Leaderboard</h2>
-            <button id="cash-out" class="pill small gold-pill" hidden>💰 Cash out</button>
-          </div>
+          <h2>Leaderboard</h2>
           <ol id="standings"></ol>
         </div>
 
@@ -86,6 +84,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <div id="fx" aria-hidden="true"></div>
 
-    <script type="module" src="src/app.js"></script>
+    <script type="module" src="src/app.js?v=5"></script>
   </body>
 </html>

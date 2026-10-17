@@ -1,5 +1,5 @@
-import { settleHand, whoOwesWhom } from "./scoring.js";
-import { sound, buzz, flyChips, confetti, rollNumber, toast, setMuted } from "./fx.js";
+import { settleHand, whoOwesWhom } from "./scoring.js?v=5";
+import { sound, buzz, flyChips, confetti, rollNumber, toast, setMuted } from "./fx.js?v=5";
 
 const STORAGE_KEY = "marriage-calculator:v1";
 const PREFS_KEY = "marriage-calculator:prefs";
@@ -526,7 +526,9 @@ function renderCashOut(animate) {
   const byId = Object.fromEntries(state.players.map((p) => [p.id, p]));
   $("#cashout-sub").textContent = payments.length
     ? `${payments.length} payment${payments.length === 1 ? " squares" : "s square"} everyone up after ${state.hands.length} hand${state.hands.length === 1 ? "" : "s"}.`
-    : "Everyone is even. Nobody owes anything.";
+    : state.hands.length
+      ? "Everyone is even. Nobody owes anything."
+      : "No hands played yet. Settle a hand and the payments show up here.";
   $("#payments").replaceChildren(
     ...payments.map(({ from, to, amount }, i) => {
       const who = (p, cls) => {
@@ -606,7 +608,7 @@ function render(rollFrom) {
   $("#setup").hidden = inGame;
   $("#game").hidden = !inGame;
   $("#new-game").hidden = !inGame;
-  $("#cash-out").hidden = !state.hands.length;
+  $("#cash-out").hidden = !inGame;
   if (!inGame) return renderSetup();
   if (!hand) resetHand();
   renderTable(rollFrom);
