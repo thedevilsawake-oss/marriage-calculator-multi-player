@@ -1,16 +1,28 @@
 import { settleHand } from "./scoring.js";
+import { sound, buzz, flyChips, confetti, rollNumber, toast, setMuted } from "./fx.js";
 
 const STORAGE_KEY = "marriage-calculator:v1";
+const PREFS_KEY = "marriage-calculator:prefs";
+const AVATARS = ["🦁", "🐯", "🦊", "🐼", "🐸", "🐵", "🦄", "🐲", "🦅", "🐺", "🐙", "🤠", "😎", "👑", "🎩", "💎"];
+const COLORS = ["#ff4d6d", "#4dd4ff", "#ffd54a", "#7cff8a", "#c77dff", "#ff9f43", "#ff7eb6", "#5ce1e6"];
 const $ = (sel) => document.querySelector(sel);
 
-// state = { players: [{id, name}], hands: [{id, at, winnerId, dubleeWin, entries, net}] }
+// state = { players: [{id, name, avatar, color}], hands: [{id, at, winnerId, dubleeWin, entries, net}] }
 let state = load();
-let draftNames = ["", "", "", ""];
+let draft = defaultDraft(4);
+let busy = false;
 
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved && Array.isArray(saved.players)) return saved;
+    if (saved && Array.isArray(saved.players)) {
+      // Older saves have no avatar/colour.
+      saved.players.forEach((p, i) => {
+        p.avatar ??= AVATARS[i % AVATARS.length];
+        p.color ??= COLORS[i % COLORS.length];
+      });
+      return saved;
+    }
   } catch {}
   return { players: [], hands: [] };
 }
@@ -21,84 +33,146 @@ function save() {
   } catch {}
 }
 
+const prefs = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
+  } catch {
+    return {};
+  }
+})();
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {}
+}
+
 const uid = () => Math.random().toString(36).slice(2, 10);
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
 const tone = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "");
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
+  node.append(...children.filter((c) => c != null));
   return node;
 }
 
+// ---------- Sound toggle ----------
+
+function renderSound() {
+  setMuted(!!prefs.muted);
+  $("#sound").textContent = prefs.muted ? "🔇" : "🔊";
+  $("#sound").setAttribute("aria-pressed", String(!prefs.muted));
+}
+$("#sound").onclick = () => {
+  prefs.muted = !prefs.muted;
+  savePrefs();
+  renderSound();
+  sound.tap();
+};
+
 // ---------- Setup ----------
 
+function defaultDraft(n) {
+  return Array.from({ length: n }, (_, i) => ({
+    name: "",
+    avatar: AVATARS[i % AVATARS.length],
+    color: COLORS[i % COLORS.length],
+  }));
+}
+
 function renderSetup() {
-  const list = $("#setup-players");
-  list.replaceChildren(
-    ...draftNames.map((name, i) => {
-      const input = el("input", {
-        type: "text",
-        value: name,
-        placeholder: `Player ${i + 1}`,
-        oninput: (e) => (draftNames[i] = e.target.value),
-      });
-      const remove = el("button", {
-        className: "ghost icon",
-        textContent: "✕",
-        title: "Remove player",
-        disabled: draftNames.length <= 2,
+  $("#setup-players").replaceChildren(
+    ...draft.map((d, i) => {
+      const avatar = el("button", {
+        className: "avatar big",
+        textContent: d.avatar,
+        title: "Change avatar",
         onclick: () => {
-          draftNames.splice(i, 1);
+          // Cycle to the next avatar nobody else at the table is using.
+          const taken = new Set(draft.filter((o) => o !== d).map((o) => o.avatar));
+          let i = AVATARS.indexOf(d.avatar);
+          do i = (i + 1) % AVATARS.length;
+          while (taken.has(AVATARS[i]));
+          d.avatar = AVATARS[i];
+          sound.tap();
+          buzz();
           renderSetup();
         },
       });
-      return el("li", {}, input, remove);
+      avatar.style.setProperty("--ring", d.color);
+      const input = el("input", {
+        type: "text",
+        value: d.name,
+        placeholder: `Player ${i + 1}`,
+        maxLength: 16,
+        oninput: (e) => (d.name = e.target.value),
+      });
+      const remove = el("button", {
+        className: "pill icon",
+        textContent: "✕",
+        title: "Remove player",
+        disabled: draft.length <= 2,
+        onclick: () => {
+          draft.splice(i, 1);
+          renderSetup();
+        },
+      });
+      return el("li", {}, avatar, input, remove);
     }),
   );
+  $("#add-player").disabled = draft.length >= 8;
 }
 
 $("#add-player").onclick = () => {
-  draftNames.push("");
+  const i = draft.length;
+  const used = new Set(draft.map((d) => d.avatar));
+  draft.push({
+    name: "",
+    avatar: AVATARS.find((a) => !used.has(a)) ?? AVATARS[i % AVATARS.length],
+    color: COLORS[i % COLORS.length],
+  });
+  sound.tap();
   renderSetup();
   $("#setup-players li:last-child input").focus();
 };
 
 $("#start-game").onclick = () => {
-  const names = draftNames.map((n, i) => n.trim() || `Player ${i + 1}`);
+  const names = draft.map((d, i) => d.name.trim() || `Player ${i + 1}`);
   const error = $("#setup-error");
-  if (names.length < 2) {
-    error.textContent = "You need at least 2 players.";
+  const fail = (msg) => {
+    error.textContent = msg;
     error.hidden = false;
-    return;
-  }
+    sound.error();
+  };
+  if (names.length < 2) return fail("You need at least 2 players.");
   if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) {
-    error.textContent = "Player names must be different.";
-    error.hidden = false;
-    return;
+    return fail("Player names must be different.");
   }
   error.hidden = true;
-  state = { players: names.map((name) => ({ id: uid(), name })), hands: [] };
-  resetHandDraft();
+  state = {
+    players: draft.map((d, i) => ({ id: uid(), name: names[i], avatar: d.avatar, color: d.color })),
+    hands: [],
+  };
+  resetHand();
   save();
+  sound.win();
   render();
+  confetti(null, 60);
 };
 
 $("#new-game").onclick = () => {
-  if (state.hands.length && !confirm("Start a new game? The current scores and history will be cleared.")) {
-    return;
-  }
-  draftNames = state.players.map((p) => p.name);
+  if (state.hands.length && !confirm("Start a new table? The current scores and history will be cleared.")) return;
+  draft = state.players.map(({ name, avatar, color }) => ({ name, avatar, color }));
   state = { players: [], hands: [] };
   save();
   render();
 };
 
-// ---------- Hand entry ----------
+// ---------- Hand being entered ----------
 
-// Draft of the hand currently being entered.
 let hand;
-function resetHandDraft() {
+function resetHand() {
   hand = {
     winnerId: null,
     dubleeWin: false,
@@ -106,11 +180,13 @@ function resetHandDraft() {
   };
 }
 
+const isSeen = (id) => id === hand.winnerId || hand.entries[id].seen;
+
 function handInput() {
   return {
     players: state.players.map((p) => ({
       id: p.id,
-      seen: p.id === hand.winnerId || hand.entries[p.id].seen,
+      seen: isSeen(p.id),
       maal: Number(hand.entries[p.id].maal) || 0,
     })),
     winnerId: hand.winnerId,
@@ -118,200 +194,329 @@ function handInput() {
   };
 }
 
-function renderHandEntry() {
-  $("#hand-number").textContent = `#${state.hands.length + 1}`;
-  const preview = hand.winnerId ? settleHand(handInput()) : null;
+// ---------- Totals & stats ----------
 
-  $("#hand-entry tbody").replaceChildren(
-    ...state.players.map((p) => {
-      const entry = hand.entries[p.id];
-      const isWinner = p.id === hand.winnerId;
-      const seen = isWinner || entry.seen;
+function totals(hands = state.hands) {
+  const sum = Object.fromEntries(state.players.map((p) => [p.id, 0]));
+  for (const h of hands) for (const [id, n] of Object.entries(h.net)) sum[id] += n;
+  return sum;
+}
 
-      const won = el("input", {
-        type: "radio",
-        name: "winner",
-        checked: isWinner,
-        onchange: () => {
-          hand.winnerId = p.id;
-          renderHandEntry();
-        },
-      });
-      const seenBox = el("input", {
-        type: "checkbox",
-        checked: seen,
-        disabled: isWinner,
-        onchange: (e) => {
-          entry.seen = e.target.checked;
-          renderHandEntry();
-        },
-      });
-      const maal = el("input", {
-        type: "number",
-        inputMode: "numeric",
-        min: "0",
-        step: "1",
-        value: seen ? entry.maal : "",
-        placeholder: seen ? "0" : "—",
-        disabled: !seen,
-        oninput: (e) => {
-          entry.maal = e.target.value;
-          updatePreview();
-        },
-      });
-      const net = preview ? preview[p.id] : null;
-      const netCell = el("td", {
-        className: `net ${net == null ? "" : tone(net)}`,
-        textContent: net == null ? "" : signed(net),
-      });
-      netCell.dataset.player = p.id;
+function streakOf(id) {
+  let n = 0;
+  for (let i = state.hands.length - 1; i >= 0 && state.hands[i].winnerId === id; i--) n++;
+  return n;
+}
 
-      return el(
-        "tr",
-        { className: isWinner ? "winner" : "" },
-        el("td", { textContent: p.name }),
-        el("td", { className: "center" }, won),
-        el("td", { className: "center" }, seenBox),
-        el("td", {}, maal),
-        netCell,
-      );
-    }),
+function ranks(sum) {
+  const sorted = [...state.players].sort((a, b) => sum[b.id] - sum[a.id]);
+  return Object.fromEntries(sorted.map((p, i) => [p.id, i]));
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+// ---------- The table ----------
+
+function seat(p, sum, rank) {
+  const entry = hand.entries[p.id];
+  const isWinner = p.id === hand.winnerId;
+  const seen = isSeen(p.id);
+  const streak = streakOf(p.id);
+
+  const avatar = el("div", { className: "avatar", textContent: p.avatar });
+  avatar.style.setProperty("--ring", p.color);
+
+  const balance = el("span", { className: `balance ${tone(sum[p.id])}`, textContent: signed(sum[p.id]) });
+  balance.dataset.balance = p.id;
+
+  const crown = el("button", {
+    className: `toggle crown ${isWinner ? "on" : ""}`,
+    innerHTML: "👑<span>Won</span>",
+    title: "Ended the game",
+    ariaPressed: String(isWinner),
+    onclick: () => {
+      hand.winnerId = isWinner ? null : p.id;
+      sound.tap();
+      buzz();
+      renderTable();
+    },
+  });
+  const eye = el("button", {
+    className: `toggle eye ${seen ? "on" : ""}`,
+    innerHTML: `${seen ? "👁" : "🙈"}<span>${seen ? "Seen" : "Unseen"}</span>`,
+    ariaPressed: String(seen),
+    disabled: isWinner,
+    title: isWinner ? "The winner always has seen the joker" : "Did this player see the joker?",
+    onclick: () => {
+      entry.seen = !entry.seen;
+      sound.tap();
+      buzz();
+      renderTable();
+    },
+  });
+
+  const maal = el("input", {
+    type: "number",
+    inputMode: "numeric",
+    min: "0",
+    step: "1",
+    value: seen ? entry.maal : "",
+    placeholder: seen ? "0" : "—",
+    disabled: !seen,
+    ariaLabel: `${p.name} maal`,
+    oninput: (e) => {
+      entry.maal = e.target.value;
+      updatePreview();
+    },
+  });
+  const step = (d) =>
+    el("button", {
+      className: "step",
+      textContent: d > 0 ? "+" : "−",
+      disabled: !seen,
+      ariaLabel: `${d > 0 ? "Add" : "Remove"} one maal`,
+      onclick: () => {
+        entry.maal = String(Math.max(0, (Number(entry.maal) || 0) + d));
+        maal.value = entry.maal;
+        sound.tap();
+        buzz(5);
+        updatePreview();
+      },
+    });
+
+  const net = el("div", { className: "net-bubble" });
+  net.dataset.net = p.id;
+
+  const badges = el(
+    "div",
+    { className: "badges" },
+    rank < 3 && state.hands.length ? el("span", { textContent: MEDALS[rank] }) : null,
+    streak >= 2 ? el("span", { className: "streak", textContent: `🔥${streak}` }) : null,
   );
-  $("#dublee-win").checked = hand.dubleeWin;
+
+  const node = el(
+    "div",
+    { className: `seat ${isWinner ? "winner" : ""} ${seen ? "" : "unseen"}` },
+    badges,
+    el("div", { className: "seat-head" }, avatar, el("div", { className: "who" }, el("b", { textContent: p.name }), el("span", { className: "stack" }, el("i", { className: "mini-chip" }), balance))),
+    el("div", { className: "toggles" }, crown, eye),
+    el("label", { className: "maal" }, el("span", { className: "maal-row" }, "Maal", net), el("div", { className: "stepper" }, step(-1), maal, step(1))),
+  );
+  node.dataset.seat = p.id;
+  node.style.setProperty("--ring", p.color);
+  return node;
 }
 
-// Refresh only the Net column so typing into a maal box keeps focus.
-function updatePreview() {
-  if (!hand.winnerId) return;
-  const preview = settleHand(handInput());
-  for (const cell of document.querySelectorAll("#hand-entry td.net")) {
-    const n = preview[cell.dataset.player];
-    cell.textContent = signed(n);
-    cell.className = `net ${tone(n)}`;
+function pot() {
+  const winner = state.players.find((p) => p.id === hand.winnerId);
+  const dublee = el("button", {
+    className: `toggle dublee ${hand.dubleeWin ? "on" : ""}`,
+    innerHTML: "🃏<span>8 dublees</span>",
+    ariaPressed: String(hand.dubleeWin),
+    title: "Winner ended with 8 dublees: +5 from each opponent",
+    onclick: () => {
+      hand.dubleeWin = !hand.dubleeWin;
+      sound.tap();
+      buzz();
+      renderTable();
+    },
+  });
+  const settle = el("button", {
+    className: "gold-btn",
+    id: "settle",
+    textContent: winner ? `Settle · ${winner.name} wins` : "Pick a winner 👑",
+    disabled: !winner,
+    onclick: settleUp,
+  });
+  return el(
+    "div",
+    { className: "pot" },
+    el("div", { className: "pot-title" }, el("span", { className: "label", textContent: "Hand" }), el("span", { className: "hand-no", textContent: `#${state.hands.length + 1}` })),
+    el("div", { className: "pot-total" }, el("span", { className: "label", textContent: "Maal on table" }), el("span", { id: "pot-total", textContent: "0" })),
+    dublee,
+    settle,
+  );
+}
+
+function renderTable(rollFrom) {
+  const sum = totals();
+  const rank = ranks(sum);
+  const seats = state.players.map((p) => seat(p, sum, rank[p.id]));
+  // Put the pot in the middle of the table, between the two halves of the seats.
+  const half = Math.ceil(seats.length / 2);
+  $("#table").style.setProperty("--cols", Math.min(half, 4));
+  $("#table").replaceChildren(...seats.slice(0, half), pot(), ...seats.slice(half));
+  $("#table").classList.toggle("has-winner", !!hand.winnerId);
+  if (rollFrom) {
+    for (const p of state.players) {
+      rollNumber($(`[data-balance="${p.id}"]`), rollFrom[p.id], sum[p.id], signed);
+    }
   }
-}
-
-$("#dublee-win").onchange = (e) => {
-  hand.dubleeWin = e.target.checked;
   updatePreview();
-};
+}
 
-$("#save-hand").onclick = () => {
-  const error = $("#hand-error");
-  if (!hand.winnerId) {
-    error.textContent = "Pick who won the hand.";
-    error.hidden = false;
-    return;
+// Refresh the net bubbles and pot without rebuilding the seats, so typing keeps focus.
+function updatePreview() {
+  const input = handInput();
+  $("#pot-total").textContent = input.players.reduce((s, p) => s + (p.seen ? p.maal : 0), 0);
+  const preview = hand.winnerId ? settleHand(input) : null;
+  for (const bubble of document.querySelectorAll("[data-net]")) {
+    const n = preview?.[bubble.dataset.net];
+    bubble.textContent = n == null ? "" : signed(n);
+    bubble.className = `net-bubble ${n == null ? "" : `show ${tone(n)}`}`;
   }
+}
+
+// ---------- Settling a hand ----------
+
+async function settleUp() {
+  if (busy) return;
+  const error = $("#hand-error");
   const input = handInput();
   if (input.players.some((p) => p.maal < 0 || !Number.isInteger(p.maal))) {
     error.textContent = "Maal must be a whole number of 0 or more.";
     error.hidden = false;
+    sound.error();
     return;
   }
   error.hidden = true;
+  busy = true;
+  $("#settle").disabled = true;
+
+  const before = totals();
+  const net = settleHand(input);
+  const winner = state.players.find((p) => p.id === input.winnerId);
+  const seatOf = (id) => $(`[data-seat="${id}"]`);
+
+  // Chips fly from each payer to the winner (or from the winner to anyone the winner owes).
+  const flights = state.players
+    .filter((p) => p.id !== winner.id && net[p.id] !== 0)
+    .map((p, i) => {
+      const amount = Math.abs(net[p.id]);
+      const count = Math.min(8, Math.max(2, Math.ceil(amount / 5)));
+      const [from, to] = net[p.id] < 0 ? [p, winner] : [winner, p];
+      return new Promise((r) => setTimeout(r, i * 180)).then(() =>
+        flyChips(seatOf(from.id), seatOf(to.id), count, from.color),
+      );
+    });
+  await Promise.all(flights);
+
   state.hands.push({
     id: uid(),
     at: Date.now(),
     winnerId: input.winnerId,
     dubleeWin: input.dubleeWin,
     entries: input.players,
-    net: settleHand(input),
+    net,
   });
   save();
-  resetHandDraft();
-  render();
-};
+  resetHand();
+  render(before);
 
-// ---------- Totals & history ----------
-
-function totals() {
-  const sum = Object.fromEntries(state.players.map((p) => [p.id, 0]));
-  for (const h of state.hands) {
-    for (const [id, n] of Object.entries(h.net)) sum[id] += n;
-  }
-  return sum;
+  const winnerSeat = seatOf(winner.id);
+  winnerSeat?.classList.add("celebrate");
+  confetti(winnerSeat);
+  sound.win();
+  buzz([20, 40, 20]);
+  const gain = net[winner.id];
+  toast(`${winner.avatar} <b>${escapeHtml(winner.name)}</b> ${gain >= 0 ? "collects" : "pays out"} <b class="${tone(gain)}">${signed(gain)}</b>${input.dubleeWin ? " · 8 dublees!" : ""}`);
+  busy = false;
 }
 
-function renderTotals() {
+// ---------- Leaderboard & log ----------
+
+function renderStandings(rollFrom) {
   const sum = totals();
-  const ranked = [...state.players].sort((a, b) => sum[b.id] - sum[a.id]);
-  $("#totals").replaceChildren(
-    ...ranked.map((p) =>
-      el(
-        "tr",
+  const values = Object.values(sum).map(Math.abs);
+  const max = Math.max(1, ...values);
+  const sorted = [...state.players].sort((a, b) => sum[b.id] - sum[a.id]);
+  $("#standings").replaceChildren(
+    ...sorted.map((p, i) => {
+      const value = el("span", { className: `num ${tone(sum[p.id])}`, textContent: signed(sum[p.id]) });
+      if (rollFrom) rollNumber(value, rollFrom[p.id], sum[p.id], signed);
+      const bar = el("div", { className: `bar ${sum[p.id] < 0 ? "neg" : ""}` });
+      bar.style.setProperty("--w", `${(Math.abs(sum[p.id]) / max) * 100}%`);
+      bar.style.setProperty("--c", p.color);
+      const wins = state.hands.filter((h) => h.winnerId === p.id).length;
+      return el(
+        "li",
         {},
-        el("td", { textContent: p.name }),
-        el("td", { className: `num ${tone(sum[p.id])}`, textContent: signed(sum[p.id]) }),
-      ),
-    ),
+        el("span", { className: "rank", textContent: state.hands.length && i < 3 ? MEDALS[i] : `${i + 1}` }),
+        el("span", { className: "avatar small", textContent: p.avatar }),
+        el("div", { className: "who" }, el("b", { textContent: p.name }), el("span", { className: "sub", textContent: `${wins} win${wins === 1 ? "" : "s"}` }), bar),
+        value,
+      );
+    }),
   );
 }
 
 function renderHistory() {
-  const table = $("#history");
   $("#no-history").hidden = state.hands.length > 0;
-  if (!state.hands.length) {
-    table.replaceChildren();
-    return;
-  }
-  const head = el(
-    "tr",
-    {},
-    el("th", { textContent: "#" }),
-    ...state.players.map((p) => el("th", { className: "num", textContent: p.name })),
-    el("th"),
-  );
-  const rows = state.hands
-    .map((h, i) =>
+  $("#undo").hidden = state.hands.length === 0;
+  const byId = Object.fromEntries(state.players.map((p) => [p.id, p]));
+  const items = state.hands.map((h, i) => {
+    const winner = byId[h.winnerId];
+    const chips = state.players.map((p) => {
+      const entry = h.entries.find((e) => e.id === p.id);
+      return el(
+        "span",
+        {
+          className: `delta ${tone(h.net[p.id])} ${p.id === h.winnerId ? "won" : ""}`,
+          title: entry.seen ? `${p.name}: maal ${entry.maal}` : `${p.name}: did not see the joker`,
+        },
+        `${p.avatar} ${signed(h.net[p.id])}`,
+        entry.seen ? null : el("small", { textContent: " 🙈" }),
+      );
+    });
+    return el(
+      "li",
+      {},
       el(
-        "tr",
-        {},
-        el("td", { textContent: `${i + 1}${h.dubleeWin ? " D" : ""}`, title: h.dubleeWin ? "8 dublees" : "" }),
-        ...state.players.map((p) => {
-          const entry = h.entries.find((e) => e.id === p.id);
-          const cell = el("td", {
-            className: `num ${tone(h.net[p.id])}`,
-            textContent: signed(h.net[p.id]),
-            title: entry.seen ? `Maal ${entry.maal}` : "Did not see the joker",
-          });
-          if (p.id === h.winnerId) cell.prepend(el("span", { className: "crown", textContent: "★ " }));
-          if (!entry.seen) cell.append(el("span", { className: "unseen", textContent: " ·u" }));
-          return cell;
+        "div",
+        { className: "log-head" },
+        el("span", { className: "hand-no", textContent: `#${i + 1}` }),
+        el("span", { textContent: `👑 ${winner.name}${h.dubleeWin ? " · 🃏 dublees" : ""}` }),
+        el("button", {
+          className: "pill icon",
+          textContent: "✕",
+          title: "Delete this hand",
+          onclick: () => {
+            if (!confirm(`Delete hand ${i + 1}?`)) return;
+            const before = totals();
+            state.hands = state.hands.filter((x) => x.id !== h.id);
+            save();
+            render(before);
+          },
         }),
-        el(
-          "td",
-          {},
-          el("button", {
-            className: "ghost icon",
-            textContent: "✕",
-            title: "Delete this hand",
-            onclick: () => {
-              if (!confirm(`Delete hand ${i + 1}?`)) return;
-              state.hands = state.hands.filter((x) => x.id !== h.id);
-              save();
-              render();
-            },
-          }),
-        ),
       ),
-    )
-    .reverse();
-  table.replaceChildren(el("thead", {}, head), el("tbody", {}, ...rows));
+      el("div", { className: "deltas" }, ...chips),
+    );
+  });
+  $("#history").replaceChildren(...items.reverse());
 }
+
+$("#undo").onclick = () => {
+  if (!state.hands.length || !confirm(`Undo hand ${state.hands.length}?`)) return;
+  const before = totals();
+  state.hands.pop();
+  save();
+  render(before);
+  toast("↶ Last hand undone");
+};
 
 // ---------- Top level ----------
 
-function render() {
+function render(rollFrom) {
   const inGame = state.players.length > 0;
   $("#setup").hidden = inGame;
   $("#game").hidden = !inGame;
   $("#new-game").hidden = !inGame;
   if (!inGame) return renderSetup();
-  if (!hand) resetHandDraft();
-  renderTotals();
-  renderHandEntry();
+  if (!hand) resetHand();
+  renderTable(rollFrom);
+  renderStandings(rollFrom);
   renderHistory();
 }
 
+renderSound();
 render();

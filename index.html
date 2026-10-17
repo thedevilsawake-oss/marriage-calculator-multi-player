@@ -2,69 +2,57 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#1f6f4a" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b2a1c" />
     <title>Marriage Calculator</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%E2%99%A5%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="src/style.css" />
   </head>
   <body>
     <header>
-      <h1>Marriage Calculator</h1>
-      <button id="new-game" class="ghost" hidden>New game</button>
+      <h1><span class="suit">♥</span> Marriage</h1>
+      <div class="header-actions">
+        <button id="sound" class="pill" aria-label="Toggle sound">🔊</button>
+        <button id="new-game" class="pill" hidden>New table</button>
+      </div>
     </header>
 
     <main>
       <!-- Setup: shown when no game is in progress -->
-      <section id="setup" class="card" hidden>
-        <h2>Players</h2>
-        <p class="hint">Add everyone at the table, in seating order.</p>
-        <ol id="setup-players"></ol>
-        <div class="row">
-          <button id="add-player" class="ghost">+ Add player</button>
-          <button id="start-game">Start game</button>
+      <section id="setup" hidden>
+        <div class="felt setup-felt">
+          <h2 class="neon">Take a seat</h2>
+          <p class="hint">Tap an avatar to change it. Add players in seating order.</p>
+          <ol id="setup-players"></ol>
+          <button id="add-player" class="pill wide">+ Add player</button>
+          <p id="setup-error" class="error" hidden></p>
+          <button id="start-game" class="gold-btn">Deal me in</button>
         </div>
-        <p id="setup-error" class="error" hidden></p>
       </section>
 
-      <!-- Game: totals, hand entry, history -->
+      <!-- Game: the table, standings, hand log -->
       <section id="game" hidden>
-        <div class="card">
-          <h2>Totals</h2>
-          <table id="totals"></table>
+        <div class="felt table" id="table"></div>
+        <p id="hand-error" class="error center" hidden></p>
+
+        <div class="panel">
+          <h2>Leaderboard</h2>
+          <ol id="standings"></ol>
         </div>
 
-        <div class="card">
-          <h2>Hand <span id="hand-number"></span></h2>
-          <table id="hand-entry">
-            <thead>
-              <tr>
-                <th>Player</th>
-                <th title="Player who ended the game">Won</th>
-                <th title="Saw the joker (tiplu)">Seen</th>
-                <th>Maal</th>
-                <th>Net</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <label class="check">
-            <input type="checkbox" id="dublee-win" />
-            Winner ended with 8 dublees (+5 from each opponent)
-          </label>
-          <p id="hand-error" class="error" hidden></p>
-          <button id="save-hand">Save hand</button>
-        </div>
-
-        <div class="card">
-          <h2>History</h2>
-          <p id="no-history" class="hint">No hands played yet.</p>
-          <div class="scroll">
-            <table id="history"></table>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Hand log</h2>
+            <button id="undo" class="pill small" hidden>↶ Undo last</button>
           </div>
+          <p id="no-history" class="hint">No hands played yet. Pick a winner to get started.</p>
+          <ol id="history"></ol>
         </div>
 
-        <details class="card rules">
+        <details class="panel rules">
           <summary>How scoring works</summary>
           <ul>
             <li>Each opponent pays the winner <b>3</b> if they saw the joker, <b>10</b> if they did not.</li>
@@ -77,6 +65,9 @@
         </details>
       </section>
     </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="fx" aria-hidden="true"></div>
 
     <script type="module" src="src/app.js"></script>
   </body>

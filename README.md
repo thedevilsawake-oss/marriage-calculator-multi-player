@@ -1,18 +1,20 @@
 # Marriage Calculator
 
-A web app for settling points in the Nepali card game **Marriage**. One phone or laptop keeps score for the whole table, and it works offline.
+A casino-style scorekeeper for the Nepali card game **Marriage**. One phone or laptop keeps score for the whole table, and it works offline.
+
+Players sit around a felt table with avatars and chip balances. When a hand is settled, chips fly from the players who pay to the winner, with confetti and sound effects. There's also a leaderboard, win streaks and a hand log.
 
 ## Using it
 
-1. Enter the players' names, in seating order, and press **Start game**.
+1. Enter the players' names in seating order (tap an avatar to change it), then press **Deal me in**.
 2. After each hand:
-   - pick the player who **won** (ended the game),
-   - tick **Seen** for every player who saw the joker (tiplu),
-   - type each seen player's **maal** total,
-   - tick **8 dublees** if the winner ended with dublees.
-3. The **Net** column shows each player's result for the hand. Press **Save hand** to add it to the running totals.
+   - tap 👑 on the player who **won** (ended the game),
+   - tap 👁 for every player who saw the joker (🙈 means unseen),
+   - enter each seen player's **maal** with − / + or by typing,
+   - tap **🃏 8 dublees** if the winner ended with dublees.
+3. Each seat shows its result for the hand as you go. Press **Settle** to pay out.
 
-History is saved in the browser, so a reload won't lose it. Use ✕ on a history row to undo a hand, or **New game** to start again.
+Scores are saved in the browser, so a reload won't lose them. Use **Undo last** or ✕ in the hand log to remove a hand, or **New table** to start again. 🔊 turns the sound on or off.
 
 ## Scoring rules
 
